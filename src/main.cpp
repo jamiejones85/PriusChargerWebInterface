@@ -51,8 +51,11 @@
 #include <ArduinoJson.h>
 #include <FS.h>
 #include <Ticker.h>
+#include "Stk500.h"
+#include "IntelHexParse.h"
 
 #define DBG_OUTPUT_PORT Serial
+#define RESET_PIN D2
 
 const char* host = "charger";
 StaticJsonDocument<200> root;
@@ -62,8 +65,10 @@ ESP8266WebServer server(80);
 WebSocketsServer webSocket = WebSocketsServer(81);
 
 void staCheck();
+void broadcastMessage(String message);
 Ticker sta_tick(staCheck, 1000, 0, MICROS);
 int8_t connectionNumber = 0;
+File fsUploadFile;
 
 String getContentType(String filename){
   if(server.hasArg("download")) return "application/octet-stream";
@@ -98,6 +103,61 @@ bool handleFileRead(String path){
   return false;
 }
 
+void handleFileUpload(){
+  if(server.uri() != "/edit") return;
+  HTTPUpload& upload = server.upload();
+  if(upload.status == UPLOAD_FILE_START){
+    String filename = upload.filename;
+    if(!filename.startsWith("/")) filename = "/"+filename;
+    //DBG_OUTPUT_PORT.print("handleFileUpload Name: "); DBG_OUTPUT_PORT.println(filename);
+    fsUploadFile = SPIFFS.open(filename, "w");
+    filename = String();
+  } else if(upload.status == UPLOAD_FILE_WRITE){
+    //DBG_OUTPUT_PORT.print("handleFileUpload Data: "); DBG_OUTPUT_PORT.println(upload.currentSize);
+    if(fsUploadFile)
+      fsUploadFile.write(upload.buf, upload.currentSize);
+  } else if(upload.status == UPLOAD_FILE_END){
+    if(fsUploadFile)
+      fsUploadFile.close();
+    //DBG_OUTPUT_PORT.print("handleFileUpload Size: "); DBG_OUTPUT_PORT.println(upload.totalSize);
+  }
+}
+
+static void handleUpdate()
+{
+  if(!server.hasArg("file")) {server.send(500, "text/plain", "BAD ARGS"); return;}
+    String filename = server.arg("file");
+    File file = SPIFFS.open(filename, "r");
+
+    if(file) {
+      broadcastMessage("Resetting Atmega");
+      Stk500 stk500(RESET_PIN);
+      stk500.setupDevice();
+      IntelHexParse hexParse = IntelHexParse();
+      broadcastMessage("Sending File");
+
+      while(file.available()) {
+
+        byte buff[50];
+        String data = file.readStringUntil('\n');
+        data.getBytes(buff, data.length());
+        hexParse.ParseLine(buff);
+        
+        if(hexParse.IsPageReady()){
+          byte* page = hexParse.GetMemoryPage();
+          byte* address = hexParse.GetLoadAddress();
+          stk500.flashPage(address, page);
+        }
+      }
+      stk500.exitProgMode();
+      file.close();
+    }
+  Serial.begin(57600);
+
+
+  
+  server.send(200, "text/json", "{}");
+}
 
 void handleFileList() {
   String path = "/";
@@ -200,6 +260,9 @@ void setup(void){
   Serial.setTimeout(100);
   SPIFFS.begin();
 
+  pinMode(RESET_PIN, OUTPUT);
+  digitalWrite(RESET_PIN, HIGH);
+
   //WIFI INIT
   WiFi.mode(WIFI_AP_STA);
   WiFi.begin();
@@ -212,6 +275,8 @@ void setup(void){
   //list directory
   server.on("/list", HTTP_GET, handleFileList);
   server.on("/wifi", handleWifi);
+  server.on("/edit", HTTP_POST, [](){ server.send(200, "text/plain", ""); }, handleFileUpload);
+  server.on("/fwupdate", handleUpdate);
 
 
   //called when the url is not defined here
@@ -227,6 +292,15 @@ void setup(void){
   Serial.println("Web Socket Begin");
   webSocket.begin();
   webSocket.onEvent(webSocketEvent);
+  
+}
+
+void broadcastMessage(String message) {
+  String response;
+  root["message"] = message;
+  root["timestamp"] = millis();
+  serializeJson(root, response);
+  webSocket.broadcastTXT(response);
 }
  
 void loop(void){
@@ -237,11 +311,7 @@ void loop(void){
   if(connectionNumber > 0 && sendSerial && Serial.available()) {
       String message = Serial.readString();
       if (message.length() > 0) {
-        String response;
-        root["message"] = message;
-        root["timestamp"] = millis();
-        serializeJson(root, response);
-        webSocket.broadcastTXT(response);
+        broadcastMessage(message);
       }
    }
 }

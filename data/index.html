@@ -28,16 +28,25 @@
 <body onload="onLoad()">
 <div class="navbar">
 	<a class="navbar" href="#update">Update</a>
+	<a class="navbar" href="#log">Log</a>
 </div>
 <h2 id="commands">Commands</h2>
-
 <p><a href="/wifi">Wifi Settings</a>
 
-
-<h2>Serial Log</h2>
-<input type="checkbox" title="Show Serial Log" id="showLog"><label for="showLog">Show Log</label>
-<div id="output">
-
+<h2 id="update">Update</h2>
+<p>Use binary files (*.hex) for updating inverter firmware. Upload any other file for updating this web interface.</p>
+<form id="uploadform" enctype="multipart/form-data" action="edit" method="POST">
+	<input id="updatefile" name="updatefile" type="file" onchange="fileSelected();" />
+	<input type="button" onclick="uploadFile();" value="Upload" />
+</form>
+<div id="progress" class="graph">
+<div id="bar" style="width: 0"></div>
 </div>
+
+<h2 id="log">Serial Log</h2>
+<input type="checkbox" title="Show Serial Log" id="showLog"><label for="showLog">Show Log</label>
+	<div id="output">
+
+	</div>
 </body>
 </html>

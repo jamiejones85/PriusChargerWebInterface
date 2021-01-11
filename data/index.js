@@ -77,3 +77,59 @@ function chargerWebSocket(wsUri) {
 	   onError(evt)
 	};
  }
+
+
+ function fileSelected()
+{
+}
+
+/** @brief uploads file to web server, if bin-file uploaded, starts a firmware upgrade */
+function uploadFile() 
+{
+	var xmlhttp = new XMLHttpRequest();
+	var form = document.getElementById('uploadform');
+	
+	if (form.getFormData)
+		var fd = form.getFormData();
+	else
+		var fd = new FormData(form);
+	var file = document.getElementById('updatefile').files[0].name;
+
+	xmlhttp.onload = function() 
+	{
+		if (file.endsWith(".hex"))
+		{
+			runUpdate(-1, "/" + file);
+		}
+		document.getElementById("bar").innerHTML = "<p>Upload complete</p>";
+		setTimeout(function() { document.getElementById("bar").innerHTML = "" }, 5000);
+	}
+
+	xmlhttp.open("POST", "/edit");
+	xmlhttp.send(fd);
+}
+
+/** @brief Runs a step of a firmware upgrade
+ * Step -1 is resetting controller
+ * Steps i=0..n send page i
+ * @param step step to execute
+ * @param file file path of upgrade image on server */
+function runUpdate(step,file)
+{
+	var xmlhttp=new XMLHttpRequest();
+	xmlhttp.onload = function() 
+	{
+		step++;
+		var result = JSON.parse(this.responseText);
+		var totalPages = result.pages;
+		var progress = Math.round(100 * step / totalPages);
+		document.getElementById("bar").style.width = progress + "%";
+		document.getElementById("bar").innerHTML = "<p>" +  progress + "%</p>";
+		if (step < totalPages)
+			runUpdate(step, file);
+		else
+			document.getElementById("bar").innerHTML = "<p>Update Done!</p>";
+	}
+	xmlhttp.open("GET", "/fwupdate?step=" + step + "&file=" + file);
+	xmlhttp.send();
+}
