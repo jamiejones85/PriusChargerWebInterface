@@ -133,3 +133,9 @@ function runUpdate(step,file)
 	xmlhttp.open("GET", "/fwupdate?step=" + step + "&file=" + file);
 	xmlhttp.send();
 }
+
+function sendCmd(cmd) {
+	var xmlhttp=new XMLHttpRequest();
+	xmlhttp.open("POST", "/cmd?cmd=" + cmd);
+	xmlhttp.send();
+}

@@ -13,6 +13,8 @@ class WebServer {
         void handleWifi();
         void handleFileUpload();
         void handleUpdate();
+        void handleCmd();
+        
         bool handleFileRead(String path);
         String getContentType(String filename);
 

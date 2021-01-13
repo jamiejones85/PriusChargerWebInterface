@@ -130,8 +130,9 @@ void setup(void){
 
 void broadcastMessage(String message) {
   String response;
+  message.trim();
+  root.clear();
   root["message"] = message;
-  root["timestamp"] = millis();
   serializeJson(root, response);
   webSocket.broadcastTXT(response);
 }
