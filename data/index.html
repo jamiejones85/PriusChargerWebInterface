@@ -38,7 +38,13 @@
 <p><button onclick="sendCmd('aca 3');">Force 3A</button></p>
 <p><button onclick="sendCmd('aca 6');">Force 6A</button></p>
 <p><button onclick="sendCmd('aca 9');">Force 9A</button></p>
+<p><button onclick="sendCmd('save');">Save Params</button></p>
+<label>Send Cmd</label><input type="text" id="manualCmd" /><button id="sendManualCmd">Send</button>
 
+<h2>Config Params</h2>
+<div id="config">
+
+</div>
 <p><a href="/wifi">Wifi Settings</a>
 
 <h2 id="update">Update</h2>
@@ -52,7 +58,7 @@
 </div>
 
 <h2 id="log">Serial Log</h2>
-<input type="checkbox" title="Show Serial Log" id="showLog"><label for="showLog">Show Log</label>
+<input type="checkbox" title="Show Serial Log" id="showDebug"><label for="showDebug">Show Debug</label>
 	<div id="output">
 
 	</div>

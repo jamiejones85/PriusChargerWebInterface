@@ -54,9 +54,15 @@
 #define DBG_OUTPUT_PORT Serial
 #define RESET_PIN D2
 
-const char* host = "charger";
-StaticJsonDocument<200> root;
-bool sendSerial = false;
+char endMarker = '\n';
+const char* host = "charger.local";
+StaticJsonDocument<600> root;
+bool sendDebug = false;
+String capturing = "";
+char captureBuffer[1024];
+uint16_t capPos = 0;
+char serialBuffer[500];
+uint8_t bufPos = 0;
 
 WebSocketsServer webSocket = WebSocketsServer(81);
 WebServer webServer;
@@ -85,9 +91,9 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lenght
         
         case WStype_TEXT: {
             String _payload = String((char *) &payload[0]);
-            DeserializationError error = deserializeJson(root, _payload);
-            sendSerial = root["showLog"];
-            root["showLog"] = sendSerial;
+            deserializeJson(root, _payload);
+            sendDebug = root["showDebug"];
+            root["showDebug"] = sendDebug;
             
             String response;
             serializeJson(root, response);
@@ -113,12 +119,14 @@ void setup(void){
 
   //WIFI INIT
   WiFi.mode(WIFI_AP_STA);
+  WiFi.hostname(host);
   WiFi.begin();
   sta_tick.start();
   
   MDNS.begin(host);
   
   //SERVER INIT
+  ArduinoOTA.setHostname(host);
   ArduinoOTA.begin();
 
   webServer.setup(RESET_PIN);
@@ -128,13 +136,66 @@ void setup(void){
   
 }
 
-void broadcastMessage(String message) {
+void broadcastMessage(String message, String type) {
   String response;
   message.trim();
   root.clear();
   root["message"] = message;
+  root["type"] = type;
   serializeJson(root, response);
   webSocket.broadcastTXT(response);
+}
+
+void addToCaptureBuffer(String message) {
+    int length = message.length();
+    for(int i = 0; i < length; i++) {
+      captureBuffer[capPos] = message[i];
+      capPos++;
+    }
+}
+
+void processMessage(String message) {
+
+  if (message.startsWith("{COMMAND}")) {
+    message.replace("{COMMAND}", "");
+    broadcastMessage(message, "command");
+  } else if (message.startsWith("{ERROR}")) {
+    message.replace("{ERROR}", "");
+    broadcastMessage(message, "error");
+  } else if (message.startsWith("{DEBUG}")) {
+    message.replace("{DEBUG}", "");
+    if (sendDebug) {
+      broadcastMessage(message, "debug");
+    }
+  } else if (message.indexOf("{ENDCOMMAND}") == -1 && (message.startsWith("{STARTCOMMAND}") || capturing.equals("command"))) {
+    message.replace("{STARTCOMMAND}", "");
+    addToCaptureBuffer(message);
+    capturing = "command";
+  } else if (message.indexOf("{ENDCONFIG}") == -1 && (message.startsWith("{STARTCONFIG}") || capturing.equals("config"))) {
+    message.replace("{STARTCONFIG}", "");
+    addToCaptureBuffer(message);
+    capturing = "config";
+  } else if (message.indexOf("{ENDCOMMAND}") != -1 && capturing.equals("command")) {
+    message.replace("{ENDCOMMAND}", "");
+    addToCaptureBuffer(message);
+    captureBuffer[capPos] = '\0';
+
+    broadcastMessage(captureBuffer, "command");
+    capPos = 0;
+    capturing = "";
+  } else if (message.indexOf("{ENDCONFIG}") != -1 && capturing.equals("config")) {
+    message.replace("{ENDCONFIG}", "");
+    addToCaptureBuffer(message);
+    captureBuffer[capPos] = '\0';
+    broadcastMessage(captureBuffer, "config");
+    capPos = 0;
+    capturing = "";
+  } else {
+    //unhandled type, let UI deal with it
+    broadcastMessage(message, "unhandled");
+
+  }
+
 }
  
 void loop(void){
@@ -142,10 +203,16 @@ void loop(void){
   webSocket.loop();
   webServer.loop();
 
-  if(connectionNumber > 0 && sendSerial && Serial.available()) {
-      String message = Serial.readString();
-      if (message.length() > 0) {
-        broadcastMessage(message);
+  if(connectionNumber > 0 && Serial.available()) {
+      char receivedChar = Serial.read();
+      if (receivedChar != endMarker) {
+        serialBuffer[bufPos] = receivedChar;
+        bufPos++;
+      } else {
+        serialBuffer[bufPos] = '\0';
+        bufPos = 0;
+        processMessage(String(serialBuffer));
       }
-   }
+  }
+
 }

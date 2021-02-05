@@ -24,22 +24,76 @@ function onLoad() {
 	output = document.getElementById("output");
 	chargerWebSocket("ws://"+ location.host +":81");
 
-	const showLog = document.getElementById("showLog");
+	const showLog = document.getElementById("showDebug");
 	showLog.addEventListener('change', (event) => {
-		doSend("{showLog: " + event.target.checked + "}")
+		doSend("{showDebug: " + event.target.checked + "}")
 	})
+
+	const sendManualCmd = document.getElementById("sendManualCmd")
+	sendManualCmd.addEventListener('click', (event) => {
+		const command = document.getElementById('manualCmd')
+		sendCmd(command.value)
+	})
+
 }
 
 function onOpen(evt) {
 	console.log("Socket Connected")
+	sendCmd("params")
+}
+
+function loadConfig(config) {
+	const configDiv  = document.getElementById("config");
+	configDiv.textContent = "";
+	const configObj = JSON.parse(config)
+
+	const keys = Object.keys(configObj);
+
+	keys.forEach(function(key) {
+		const d = document.createElement( 'div' );
+		const label = document.createElement('label');
+		const input = document.createElement('input');
+		const span = document.createElement('span');
+
+		const button = document.createElement('button');
+
+		label.innerHTML = key;
+		button.innerHTML = "Set"
+
+		button.onclick = function(e) {
+			sendCmd("set " + key + " " + input.value)
+		}
+
+		input.setAttribute('value', configObj[key].value);
+
+		if (configObj[key].type == 'bool') {
+			input.setAttribute('type', 'checkbox')
+			if (configObj[key].value == 1) {
+				input.setAttribute('checked', 'checked')
+			}
+		} else if (configObj[key].type == 'number') {
+			input.setAttribute('type', 'number')
+		}
+
+		span.appendChild(input)
+		d.appendChild(label)
+		d.appendChild(span)
+		d.appendChild(button)
+
+		configDiv.appendChild(d)
+	})
 }
    
- function onMessage(evt) {
+function onMessage(evt) {
 	const json = JSON.parse(evt.data);
 
-	if (json.message) {
+	if (json.message && json.type != 'config') {
 		writeToScreen('<span style = "color: blue;">' +
 		json.message+'</span>');
+	} 
+
+	if (json.type == 'config') {
+		loadConfig(json.message)
 	}
 
  }
