@@ -19,7 +19,7 @@
  */
 
 /** @brief excutes when page finished loading. Creates tables and chart */
-var output, websocket;
+var output, websocket, clearBarTimeout
 function onLoad() {
 	output = document.getElementById("output");
 	chargerWebSocket("ws://"+ location.host +":81");
@@ -151,12 +151,13 @@ function uploadFile()
 
 	xmlhttp.onload = function() 
 	{
+		document.getElementById("bar").innerHTML = "<p>Upload complete</p>";
 		if (file.endsWith(".hex"))
 		{
 			runUpdate(-1, "/" + file);
+		} else {
+			setTimeout(function() { document.getElementById("bar").innerHTML = "" }, 5000);
 		}
-		document.getElementById("bar").innerHTML = "<p>Upload complete</p>";
-		setTimeout(function() { document.getElementById("bar").innerHTML = "" }, 5000);
 	}
 
 	xmlhttp.open("POST", "/edit");
@@ -169,23 +170,27 @@ function uploadFile()
  * @param step step to execute
  * @param file file path of upgrade image on server */
 function runUpdate(step,file)
-{
+{	
 	var xmlhttp=new XMLHttpRequest();
 	xmlhttp.onload = function() 
 	{
-		step++;
-		var result = JSON.parse(this.responseText);
-		var totalPages = result.pages;
-		var progress = Math.round(100 * step / totalPages);
-		document.getElementById("bar").style.width = progress + "%";
-		document.getElementById("bar").innerHTML = "<p>" +  progress + "%</p>";
-		if (step < totalPages)
-			runUpdate(step, file);
-		else
+		if (xmlhttp.status != 200) {
+			document.getElementById("bar").innerHTML = "<p>Update Error!</p>";
+		} else {
 			document.getElementById("bar").innerHTML = "<p>Update Done!</p>";
+		}
+		setTimeout(function() { document.getElementById("bar").innerHTML = "" }, 5000);
+
 	}
+	xmlhttp.onerror = function() {
+		document.getElementById("bar").innerHTML = "<p>Update Error!</p>";
+		setTimeout(function() { document.getElementById("bar").innerHTML = "" }, 5000);
+
+	}
+
 	xmlhttp.open("GET", "/fwupdate?step=" + step + "&file=" + file);
 	xmlhttp.send();
+	document.getElementById("bar").innerHTML = "<p>Updating</p>";
 }
 
 function sendCmd(cmd) {
